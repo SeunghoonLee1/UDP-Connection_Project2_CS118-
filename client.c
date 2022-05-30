@@ -183,9 +183,9 @@ int main (int argc, char *argv[])
 
     struct packet ackpkt;
     struct packet pkts[WND_SIZE];
-    int s = 0;
+    //int s = 0;
     int e = 0;
-    int full = 0;
+    //int full = 0;
 
     // =====================================
     // Send First Packet (ACK containing payload)
@@ -201,21 +201,98 @@ int main (int argc, char *argv[])
     e = 1;
 
     // =====================================
-    // *** TODO: Implement the rest of reliable transfer in the client ***
+    // @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ TODO: Implement the rest of reliable transfer in the client @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
     // Implement GBN for basic requirement or Selective Repeat to receive bonus
 
     // Note: the following code is not the complete logic. It only sends a
     //       single data packet, and then tears down the connection without
     //       handling data loss.
     //       Only for demo purpose. DO NOT USE IT in your final submission
+
+    int start_seq = 0;
+    int end_seq = WND_SIZE;
+    //char* status = "";
+    struct packet *buffer;
+    buffer = (struct packet *) malloc(WND_SIZE * sizeof(struct packet));
+
     while (1) {
         n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
-        if (n > 0) {
-            break;
+        // printf("n : %d\n", n);
+        // if (n == -1) {
+        //     perror("File Not Found Error!");
+        //     break;
+        // }
+        if(n > 0){
+            //Send ACK when it receives SYN packet
+            if(ackpkt.seqnum == 0 && ackpkt.fin == 2){
+                printf("Receiving packet 0\n");
+                sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, servaddrlen);
+                printf("Sending packet 0 SYN\n");
+                continue;
+            }
+    
+            printRecv(&ackpkt);
+    
+            // if (ackpkt.fin == 1){
+            //     status = "FIN";
+            // }else if (ackpkt.syn == 1){
+            //     status = "SYN";
+            // }else if (ackpkt.ack == 1){
+            //     status = "ACK";
+            // }else{
+            //     status = "";
+            // }
+            // fprintf(stdout, "Receiving packet %d %s\n", ackpkt.seqnum, status);
+    
+    
+            if (end_seq > ackpkt.acknum){
+                end_seq = ackpkt.acknum;
+            }else{
+                end_seq = WND_SIZE;
+            }
+    
+            //current packet's seq num,,,?
+            int current_pkt = (ackpkt.seqnum + MAX_SEQN) / PAYLOAD_SIZE;
+    
+            int num_pkts = current_pkt - start_seq;
+            if(num_pkts >= 0 && num_pkts < WND_SIZE){
+                //Send ACK
+                struct packet ack_packet;
+                buildPkt(&ack_packet, ackpkt.seqnum, 0, 0, 0, 1, 0, m, NULL);
+                sendto(sockfd, &ack_packet, PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
+                printSend(&ack_packet, 0);
+    
+                //Buffer first
+                memcpy(&(buffer[current_pkt - start_seq]), &ackpkt, sizeof(struct packet));
+        
+                while (1){
+                    if ((buffer[0].seqnum + MAX_SEQN) / PAYLOAD_SIZE == start_seq) {
+                        fwrite(buffer[0].payload, sizeof(char), PAYLOAD_SIZE, fp);
+                        
+                        // shift the buffer to the left
+                        for (int i = 0; i< WND_SIZE - 1; i++){ 
+                            memcpy(&(buffer[i]), &(buffer[i + 1]), sizeof(struct packet));
+                        }
+                        memset(&(buffer[WND_SIZE - 1]), -1, sizeof(struct packet));
+                        start_seq++;
+                    }else{
+                        break;
+                    }
+                }
+            }else if(num_pkts * (-1) <= WND_SIZE && num_pkts < 0){
+                //Send ACK
+                struct packet ack_packet;
+                buildPkt(&ack_packet, ackpkt.seqnum, 0, 0, 0, 1, 0, m, NULL);
+                sendto(sockfd, &ack_packet, PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
+                printSend(&ack_packet, 1);
+            }
+            //break;
         }
+
     }
 
-    // *** End of your client implementation ***
+
+    // @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ End of your client implementation @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ 
     fclose(fp);
 
     // =====================================

@@ -185,7 +185,7 @@ int main (int argc, char *argv[])
                 break;
         }
 
-        // *** TODO: Implement the rest of reliable transfer in the server ***
+        // @@@@@@@@@@@@@@@@@@@@@ TODO: Implement the rest of reliable transfer in the server @@@@@@@@@@@@@@@@@@@@@@@@@@@
         // Implement GBN for basic requirement or Selective Repeat to receive bonus
 
         // Note: the following code is not the complete logic. It only expects 
@@ -209,9 +209,11 @@ int main (int argc, char *argv[])
                     break;
                 }
             }
+
+            break;
         }
 
-        // *** End of your server implementation ***
+        // @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ End of your client implementation @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ 
 
         fclose(fp);
         // =====================================
