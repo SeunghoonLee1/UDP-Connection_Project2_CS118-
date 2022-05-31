@@ -185,7 +185,7 @@ int main (int argc, char *argv[])
                 break;
         }
 
-        // @@@@@@@@@@@@@@@@@@@@@ TODO: Implement the rest of reliable transfer in the server @@@@@@@@@@@@@@@@@@@@@@@@@@@
+        // *** TODO: Implement the rest of reliable transfer in the server ***
         // Implement GBN for basic requirement or Selective Repeat to receive bonus
 
         // Note: the following code is not the complete logic. It only expects 
@@ -208,10 +208,23 @@ int main (int argc, char *argv[])
 
                     break;
                 }
+                else {
+                    cliSeqNum = (recvpkt.seqnum + recvpkt.length) % MAX_SEQN;
+                    fwrite(recvpkt.payload, 1, recvpkt.length, fp);
+                    buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 1, 0, 0, NULL);
+                    printSend(&ackpkt, 0);
+                    sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
+
+
+                }
             }
         }
 
-        // @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ End of your server implementation @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ 
+
+
+
+
+        // *** End of your server implementation ***
 
         fclose(fp);
         // =====================================
