@@ -205,17 +205,17 @@ int main (int argc, char *argv[])
     // =====================================
     // @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ TODO: Implement the rest of reliable transfer in the client @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-    // Testing Purpose .... Send Second Packet 
+    // Testing Purpose .... Send Second Packet HARD CODED
     printf("TRY SENDING THE SECOND PACKET!!\n");
     int bytesRead = 0;
-    bytesRead = fread(buf + m, 1, PAYLOAD_SIZE, fp);    //bytesRead is 512
-    // printf("buf2 : %s\n", buf + m);
+    bytesRead = fread(buf, 1, PAYLOAD_SIZE, fp);    //bytesRead is 512
+    // printf("buf2 : %s\n", buf);
 
-    buildPkt(&pkts[1], seqNum + 1, (synackpkt.seqnum + 2) % MAX_SEQN, 0, 0, 1, 0, bytesRead, buf + m);
+    buildPkt(&pkts[1], (seqNum + PAYLOAD_SIZE) % MAX_SEQN, 0, 0, 0, 1, 0, PAYLOAD_SIZE, buf);
     printSend(&pkts[1], 0);
     sendto(sockfd, &pkts[1], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
     timer = setTimer();
-    buildPkt(&pkts[1], seqNum + 1, (synackpkt.seqnum + 2) % MAX_SEQN, 0, 0, 0, 1, bytesRead, buf + m);
+    buildPkt(&pkts[1], (seqNum + PAYLOAD_SIZE) % MAX_SEQN, 0, 0, 0, 0, 1, PAYLOAD_SIZE, buf);
     recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
 
     // Implement GBN for basic requirement or Selective Repeat to receive bonus
@@ -230,8 +230,14 @@ int main (int argc, char *argv[])
         n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
         if(n > 0){
             break;
+        }else if (isTimeout(timer)) {
+            printf("TIMEOUT@@@@@@");
+            break;
+            printTimeout(&synpkt);
+            printSend(&synpkt, 1);
+            sendto(sockfd, &synpkt, PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
+            timer = setTimer();
         }
-
     }
 
     // @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ End of your client implementation @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ 

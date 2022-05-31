@@ -122,7 +122,7 @@ int main (int argc, char *argv[])
         // =====================================
         // Establish Connection: This procedure is provided to you directly and
         // is already working.
-
+        printf("i : %d\n", i);
         int n;
 
         FILE* fp;
@@ -137,21 +137,22 @@ int main (int argc, char *argv[])
                     break;
             }
         }
-
-        unsigned short cliSeqNum = (synpkt.seqnum + 1) % MAX_SEQN; // next message from client should have this sequence number
+        printf("here1, n: %d\n", n);
+        unsigned short cliSeqNum = (synpkt.seqnum + 1) % MAX_SEQN; // next message from client should have this sequence number, ACK number basically.
 
         buildPkt(&synackpkt, seqNum, cliSeqNum, 1, 0, 1, 0, 0, NULL);
-
+        printf("here2\n");
         while (1) {
             printSend(&synackpkt, 0);
             sendto(sockfd, &synackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
-            
+            printf("here3\n");
             while(1) {
                 n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &cliaddr, (socklen_t *) &cliaddrlen);
+                printf("here4, n: %d\n", n);
                 if (n > 0) {
                     printRecv(&ackpkt);
                     if (ackpkt.seqnum == cliSeqNum && ackpkt.ack && ackpkt.acknum == (synackpkt.seqnum + 1) % MAX_SEQN) {
-
+                        
                         int length = snprintf(NULL, 0, "%d", i) + 6;
                         char* filename = malloc(length);
                         snprintf(filename, length, "%d.file", i);
@@ -180,7 +181,7 @@ int main (int argc, char *argv[])
                     }
                 }
             }
-
+            printf("here5\n");
             if (! ackpkt.syn)
                 break;
         }
@@ -204,12 +205,20 @@ int main (int argc, char *argv[])
 
                     buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 1, 0, 0, NULL);
                     printSend(&ackpkt, 0);
-                    sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
-
+                    sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen); 
+                    
                     break;
+                }else{
+                    fwrite(recvpkt.payload, 1, recvpkt.length, fp);
+                    seqNum = recvpkt.acknum;
+                    cliSeqNum = (recvpkt.seqnum + recvpkt.length) % MAX_SEQN;
+                    buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 1, 0, 0, NULL);
+                    printSend(&ackpkt, 0);
+                    sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);        
                 }
             }
         }
+
 
         // @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ End of your server implementation @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ 
 
