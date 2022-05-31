@@ -183,16 +183,14 @@ int main (int argc, char *argv[])
 
     struct packet ackpkt;
     struct packet pkts[WND_SIZE];
-    int s = 0;                      //Q. what is s, e, full for?
+    int s = 0;
     int e = 0;
     int full = 0;
 
     // =====================================
     // Send First Packet (ACK containing payload)
-    printf("TRY SENDING THE FIRST PACKET!!\n");
+
     m = fread(buf, 1, PAYLOAD_SIZE, fp);
-    //m is 512 (PAYLOAD_SIZE * 1)
-    // printf("buf1 : %s\n", buf);
 
     buildPkt(&pkts[0], seqNum, (synackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 1, 0, m, buf);
     printSend(&pkts[0], 0);
@@ -203,6 +201,7 @@ int main (int argc, char *argv[])
     e = 1;
 
     // =====================================
+<<<<<<< HEAD
     // @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ TODO: Implement the rest of reliable transfer in the client @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
     // Testing Purpose .... Send Second Packet HARD CODED
@@ -218,17 +217,22 @@ int main (int argc, char *argv[])
     buildPkt(&pkts[1], (seqNum + PAYLOAD_SIZE) % MAX_SEQN, 0, 0, 0, 0, 1, PAYLOAD_SIZE, buf);
     recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
 
+=======
+    // *** TODO: Implement the rest of reliable transfer in the client ***
+>>>>>>> 6c628e8318f842f3ac5a3416f89612c25c951a20
     // Implement GBN for basic requirement or Selective Repeat to receive bonus
+
     // Note: the following code is not the complete logic. It only sends a
     //       single data packet, and then tears down the connection without
     //       handling data loss.
     //       Only for demo purpose. DO NOT USE IT in your final submission
 
-    
-    // int bytesRead = 0;
-    while(1){
-        n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
-        if(n > 0){
+
+
+
+    // send 2nd to 10th packet
+    while (1) {
+        if (e == 10) {
             break;
         }else if (isTimeout(timer)) {
             printf("TIMEOUT@@@@@@");
@@ -238,9 +242,40 @@ int main (int argc, char *argv[])
             sendto(sockfd, &synpkt, PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
             timer = setTimer();
         }
+<<<<<<< HEAD
+=======
+        if (((m = fread(buf, 1, PAYLOAD_SIZE, fp)) > 0)) {
+            seqNum = (seqNum + PAYLOAD_SIZE) % MAX_SEQN;
+            buildPkt(&pkts[e], seqNum, 0, 0, 0, 0, 0, PAYLOAD_SIZE, buf);
+            printSend(&pkts[e], 0);
+            sendto(sockfd, &pkts[e], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
+        }
+        else {
+            break;
+        }
+        e++;
     }
 
-    // @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ End of your client implementation @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ 
+
+    // original code
+    int count = 0;
+    while (1) {
+        if (count == 10) {
+            break;
+        }
+        n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
+        if (n > 0) {
+            printRecv(&ackpkt);
+            //printf("count : %d\n", count);
+            count++;
+        }
+>>>>>>> 6c628e8318f842f3ac5a3416f89612c25c951a20
+    }
+    
+
+
+
+    // *** End of your client implementation ***
     fclose(fp);
 
     // =====================================
