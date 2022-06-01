@@ -227,16 +227,6 @@ int main (int argc, char *argv[])
     //       Only for demo purpose. DO NOT USE IT in your final submission    
 
 
-    
-    // helper function that sets full flag to 1 (logic only applicable in certain conditions)
-    void set_full(int s, int e, int *full) {
-        if (s == e) {
-            *full = 1;
-        }
-        else {
-            *full = 0;
-        }
-    }
 
     size_t bytesRead;
 
@@ -257,7 +247,14 @@ int main (int argc, char *argv[])
                 sendto(sockfd, &pkts[e], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
                 timer_array[e] = setTimer();    // implement loss algorithm after...
                 e = (e + 1) % WND_SIZE;
-                set_full(s, e, &full);
+
+                if (s == e) {
+                    full = 1;
+                }
+                else {
+                    full = 0;
+                }
+
                 num_packets++;
             }
             else {
@@ -277,8 +274,6 @@ int main (int argc, char *argv[])
             }
         }
     }
-
-
 
 
 
