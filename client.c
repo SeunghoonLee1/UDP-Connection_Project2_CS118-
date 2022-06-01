@@ -181,7 +181,7 @@ int main (int argc, char *argv[])
     // =====================================
     // CIRCULAR BUFFER VARIABLES
 
-    struct packet ackpkt;
+    struct packet ackpkt, recvpkt;
     struct packet window[WND_SIZE];
     int s = 0;  // poinst to the next slot to be freed in the window[]
     int e = 0;  // points to the next empty slot in the window[] 
@@ -237,22 +237,21 @@ int main (int argc, char *argv[])
         }
     }
 
-
-    // original code
-    // int count = 0;
-    // while (1) {
-    //     if (count == 6) {
+    // unsigned short serverSeqNum = 0;
+    // while (1){
+    //     n = recvfrom(sockfd, &recvpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
+    //     if(n > 0){
+    //         printRecv(&recvpkt);
+    //         if(recvpkt.fin){
+    //             serverSeqNum = (serverSeqNum + 1) % MAX_SEQN;
+    //             buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 1, 0, 0, NULL);
+    //             printSend(&ackpkt, 0);
+    //             sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
+    //             break;
+    //         }
     //         break;
     //     }
-    //     n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
-    //     if (n > 0) {
-    //         printRecv(&ackpkt);
-    //         printf("count : %d\n", count);
-    //         count++;
-    //     }
     // }
-    
-
 
 
     // ********************************* End of your client implementation *************************************
@@ -262,7 +261,7 @@ int main (int argc, char *argv[])
     // Connection Teardown: This procedure is provided to you directly and is
     // already working.
 
-    struct packet finpkt, recvpkt;
+    struct packet finpkt /*,recvpkt*/;
     buildPkt(&finpkt, ackpkt.acknum, 0, 0, 1, 0, 0, 0, NULL);
     buildPkt(&ackpkt, (ackpkt.acknum + 1) % MAX_SEQN, (ackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 1, 0, 0, NULL);
 
@@ -292,7 +291,7 @@ int main (int argc, char *argv[])
             if (finTimerOn && isTimeout(finTimer)) {
                 close(sockfd);
                 if (! timerOn)
-                    exit(0);
+                    exit(0);  //After receive the FIN packet, wait for 2 seconds then close connection and terminate.
             }
         }
         printRecv(&recvpkt);
