@@ -202,9 +202,9 @@ int main (int argc, char *argv[])
 
     m = fread(buf, 1, PAYLOAD_SIZE, fp);
 
-    buildPkt(&pkts[0], seqNum, (synackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 1, 0, m, buf);
-    printSend(&pkts[0], 0);
-    sendto(sockfd, &pkts[0], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
+    buildPkt(&window[0], seqNum, (synackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 1, 0, m, buf);
+    printSend(&window[0], 0);
+    sendto(sockfd, &window[0], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
 
 
     // *********************************************************************************************************************************
@@ -215,7 +215,7 @@ int main (int argc, char *argv[])
     // *********************************************************************************************************************************
 
 
-    buildPkt(&pkts[0], seqNum, (synackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 0, 1, m, buf);
+    buildPkt(&window[0], seqNum, (synackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 0, 1, m, buf);
 
     e = 1;
     filled = 1;
