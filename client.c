@@ -183,9 +183,11 @@ int main (int argc, char *argv[])
 
     struct packet ackpkt;
     struct packet pkts[WND_SIZE];
+    struct packet window[WND_SIZE];
     int s = 0;
     int e = 0;
     int full = 0;
+    int filled = 0;
 
 
     // *********************************************************************************************************************************
@@ -216,6 +218,7 @@ int main (int argc, char *argv[])
     buildPkt(&pkts[0], seqNum, (synackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 0, 1, m, buf);
 
     e = 1;
+    filled = 1;
 
     // =====================================
     // *** TODO: Implement the rest of reliable transfer in the client ***
@@ -234,6 +237,7 @@ int main (int argc, char *argv[])
     int no_more_data = 0;
     int num_packets = 1;
 
+    /*
     while (1) {
         if (no_more_data && (num_packets == 0)) {
             break;
@@ -256,8 +260,7 @@ int main (int argc, char *argv[])
                 }
 
                 num_packets++;
-            }
-            else {
+            }else {
                 no_more_data = 1;
             }
         }
@@ -274,6 +277,34 @@ int main (int argc, char *argv[])
             }
         }
     }
+    */
+
+    while (1) {
+        if(no_more_data && !filled){
+            break;  // if the buffer is empty, that means there are no more packets to transmit. Break out the loop.
+        }
+
+        m = fread(buf, 1, PAYLOAD_SIZE, fp);    
+        if(m > 0){
+            seqNum = (seqNum + m) % MAX_SEQN;
+            buildPkt(&window[e], seqNum, 0, 0, 0, 0, 0, m, buf);
+            printSend(&window[e], 0);
+            sendto(sockfd, &window[e], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
+            e = (e + 1) % WND_SIZE;
+            filled ++;            
+        }else{
+            no_more_data = 1;
+        }
+
+        n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
+        if(n > 0){//means when we received an ACK
+            printRecv(&ackpkt);
+            s = (s + 1) % WND_SIZE;
+            e = (e + 1) % WND_SIZE;
+            filled --;
+        }
+    }
+
 
 
 
