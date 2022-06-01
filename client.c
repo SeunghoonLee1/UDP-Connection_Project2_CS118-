@@ -181,13 +181,6 @@ int main (int argc, char *argv[])
     // =====================================
     // CIRCULAR BUFFER VARIABLES
 
-<<<<<<< HEAD
-    struct packet ackpkt, recvpkt;
-    struct packet window[WND_SIZE];
-    int s = 0;  // poinst to the next slot to be freed in the window[]
-    int e = 0;  // points to the next empty slot in the window[] 
-    int filled = 0; //#of packets are filled currently, in the window[] 
-=======
     struct packet ackpkt;
     struct packet pkts[WND_SIZE];
     int s = 0;
@@ -201,7 +194,6 @@ int main (int argc, char *argv[])
     // *********************************************************************************************************************************
     // *********************************************************************************************************************************
 
->>>>>>> ce3943ecd8734cc81e209b252921aff4db820401
 
     // =====================================
     // Send First Packet (ACK containing payload)
@@ -286,12 +278,8 @@ int main (int argc, char *argv[])
         }
     }
 
-<<<<<<< HEAD
-
-=======
 
 
->>>>>>> ce3943ecd8734cc81e209b252921aff4db820401
 
 
     // *** End of your client implementation ***
@@ -301,7 +289,7 @@ int main (int argc, char *argv[])
     // Connection Teardown: This procedure is provided to you directly and is
     // already working.
 
-    struct packet finpkt /*,recvpkt*/;
+    struct packet finpkt, recvpkt;
     buildPkt(&finpkt, ackpkt.acknum, 0, 0, 1, 0, 0, 0, NULL);
     buildPkt(&ackpkt, (ackpkt.acknum + 1) % MAX_SEQN, (ackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 1, 0, 0, NULL);
 
@@ -331,7 +319,7 @@ int main (int argc, char *argv[])
             if (finTimerOn && isTimeout(finTimer)) {
                 close(sockfd);
                 if (! timerOn)
-                    exit(0);  //After receive the FIN packet, wait for 2 seconds then close connection and terminate.
+                    exit(0);
             }
         }
         printRecv(&recvpkt);
