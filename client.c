@@ -182,80 +182,107 @@ int main (int argc, char *argv[])
     // CIRCULAR BUFFER VARIABLES
 
     struct packet ackpkt;
-    struct packet window[WND_SIZE];
-    int s = 0;  // poinst to the next slot to be freed in the window[]
-    int e = 0;  // points to the next empty slot in the window[] 
-    int filled = 0; //#of packets are filled currently, in the window[] 
+    struct packet pkts[WND_SIZE];
+    int s = 0;
+    int e = 0;
+    int full = 0;
+
+
+    // *********************************************************************************************************************************
+    // ********** Added our own timer buffer *******************************************************************************************
+    double timer_array[WND_SIZE];
+    // *********************************************************************************************************************************
+    // *********************************************************************************************************************************
+
 
     // =====================================
     // Send First Packet (ACK containing payload)
 
     m = fread(buf, 1, PAYLOAD_SIZE, fp);
 
-    buildPkt(&window[0], seqNum, (synackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 1, 0, m, buf);
-    printSend(&window[0], 0);
-    sendto(sockfd, &window[0], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
-    timer = setTimer();
-    buildPkt(&window[0], seqNum, (synackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 0, 1, m, buf);
+    buildPkt(&pkts[0], seqNum, (synackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 1, 0, m, buf);
+    printSend(&pkts[0], 0);
+    sendto(sockfd, &pkts[0], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
+
+
+    // *********************************************************************************************************************************
+    // ********** changed timer to timer_array[0] for Selective Repeat *****************************************************************
+    timer_array[0] = setTimer();
+    // timer = setTimer();
+    // *********************************************************************************************************************************
+    // *********************************************************************************************************************************
+
+
+    buildPkt(&pkts[0], seqNum, (synackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 0, 1, m, buf);
 
     e = 1;
-    filled = 1;
 
     // =====================================
-    // ************************** TODO: Implement the rest of reliable transfer in the client *****************************
+    // *** TODO: Implement the rest of reliable transfer in the client ***
     // Implement GBN for basic requirement or Selective Repeat to receive bonus
 
     // Note: the following code is not the complete logic. It only sends a
     //       single data packet, and then tears down the connection without
     //       handling data loss.
-    //       Only for demo purpose. DO NOT USE IT in your final submission
+    //       Only for demo purpose. DO NOT USE IT in your final submission    
 
 
-    // send the rest packets.
-    while (1) {
-        if(filled == 0){
-            break;  // if the buffer is empty, that means there are no more packets to transmit. Break out the loop.
+    
+    // helper function that sets full flag to 1 (logic only applicable in certain conditions)
+    void set_full(int s, int e, int *full) {
+        if (s == e) {
+            *full = 1;
         }
+        else {
+            *full = 0;
+        }
+    }
 
-        m = fread(buf, 1, PAYLOAD_SIZE, fp);    
-        if(m > 0){
-            seqNum = (seqNum + m) % MAX_SEQN;
-            buildPkt(&window[e], seqNum, 0, 0, 0, 0, 0, m, buf);
-            printSend(&window[e], 0);
-            sendto(sockfd, &window[e], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
-            e = (e + 1) % WND_SIZE;
-            filled ++;            
-        }else{
+    size_t bytesRead;
+
+    // extra flags
+    int no_more_data = 0;
+    int num_packets = 1;
+
+    while (1) {
+        if (no_more_data && (num_packets == 0)) {
             break;
         }
-        n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
-        if(n > 0){//means when we received an ACK
-            printRecv(&ackpkt);
-            s = (s + 1) % WND_SIZE;
-            e = (e + 1) % WND_SIZE;
-            filled --;
+        if (!full) {
+            bytesRead = fread(buf, 1, PAYLOAD_SIZE, fp);
+            if (bytesRead > 0) {
+                seqNum = (seqNum + PAYLOAD_SIZE) % MAX_SEQN;        // check last packet seqNum later... checked and looks good
+                buildPkt(&pkts[e], seqNum, 0, 0, 0, 0, 0, bytesRead, buf);
+                printSend(&pkts[e], 0);
+                sendto(sockfd, &pkts[e], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
+                timer_array[e] = setTimer();    // implement loss algorithm after...
+                e = (e + 1) % WND_SIZE;
+                set_full(s, e, &full);
+                num_packets++;
+            }
+            else {
+                no_more_data = 1;
+            }
+        }
+
+        if (full || no_more_data) {
+            n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
+            if (n > 0) {
+                printRecv(&ackpkt);
+                if (ackpkt.acknum == pkts[s].seqnum + pkts[s].length) {
+                    s = (s + 1) % WND_SIZE;
+                    num_packets--;
+                    full = 0;
+                }
+            }
         }
     }
 
 
-    // original code
-    // int count = 0;
-    // while (1) {
-    //     if (count == 6) {
-    //         break;
-    //     }
-    //     n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
-    //     if (n > 0) {
-    //         printRecv(&ackpkt);
-    //         printf("count : %d\n", count);
-    //         count++;
-    //     }
-    // }
-    
 
 
 
-    // ********************************* End of your client implementation *************************************
+    // *** End of your client implementation ***
     fclose(fp);
 
     // =====================================
