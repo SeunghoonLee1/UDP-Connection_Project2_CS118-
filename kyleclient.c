@@ -234,13 +234,13 @@ int main (int argc, char *argv[])
     int no_more_data = 0;
     int num_packets = 1;
 
-    // flags for timers
+    // timers on or off
     int timers_on[WND_SIZE];
     for (int i = 0; i < WND_SIZE; i++) {
         timers_on[i] = 0;
     }
 
-    // on for packet 1 (ACK with payload)
+    // timer alrdy on for packet 1 (ACK with payload)
     timers_on[0] = 1;
 
     // ACK tracker buffer
@@ -288,7 +288,7 @@ int main (int argc, char *argv[])
                 // if received ACK for packet at position s,
                 // turn off s timer and move s to the next position
                 if (ackpkt.acknum == (pkts[s].seqnum + pkts[s].length) % MAX_SEQN) {
-                    received_acks[s] = 1;   // <-- may not need this line
+                    received_acks[s] = 0;   // reset the value 
                     timers_on[s] = 0;
                     s = (s + 1) % WND_SIZE;
                     num_packets--;
@@ -306,9 +306,6 @@ int main (int argc, char *argv[])
                         if (ackpkt.acknum == (pkts[i].seqnum + pkts[i].length) % MAX_SEQN) {
                             received_acks[i] = 1;
                             timers_on[i] = 0;
-                        }
-                        else {
-                            received_acks[i] = 0;
                         }
                     }
                 }
