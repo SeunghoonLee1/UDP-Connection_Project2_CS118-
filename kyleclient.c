@@ -228,29 +228,32 @@ int main (int argc, char *argv[])
 
 
 
+    // *********************************************************************************************************************************
+    // *********************************************************************************************************************************
     size_t bytesRead;
 
     // extra flags
     int no_more_data = 0;
-    int num_packets = 1;
+    
+    // number of packets currently in sender  window
+    int num_packets = 1;    // packet 1 (ACK with payload) already in sender window
 
-    // timers on or off (important for when the sender window is not yet full)
+    // check if timers are on or off (important for when the sender window is not yet full)
     int timers_on[WND_SIZE];
     for (int i = 0; i < WND_SIZE; i++) {
         timers_on[i] = 0;
     }
 
-    // timer alrdy on for packet 1 (ACK with payload)
-    timers_on[0] = 1;
+    timers_on[0] = 1;     // packet 1 (ACK with payload) timer already running
 
-    // ACK tracker buffer
+    // ACK tracking for packets in sender window
     int received_acks[WND_SIZE];
     for (int i = 0; i < WND_SIZE; i++) {
         received_acks[i] = 0;
     }
 
-    // break condition: no more data to read from file && no more packets in sender window 
     while (1) {
+        // loop break condition: no more data in file and no more packets in sender window
         if (no_more_data && (num_packets == 0)) {
             break;
         }
@@ -263,6 +266,7 @@ int main (int argc, char *argv[])
                 buildPkt(&pkts[e], seqNum, 0, 0, 0, 0, 0, bytesRead, buf);
                 printSend(&pkts[e], 0);
                 sendto(sockfd, &pkts[e], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
+                
                 timer_array[e] = setTimer();
                 timers_on[e] = 1;
 
@@ -285,6 +289,7 @@ int main (int argc, char *argv[])
             n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
             if (n > 0) {
                 printRecv(&ackpkt);
+                
                 // if received ACK for packet at position s,
                 // move s to the next position
                 if (ackpkt.acknum == (pkts[s].seqnum + pkts[s].length) % MAX_SEQN) {
@@ -299,6 +304,7 @@ int main (int argc, char *argv[])
                 // then either s data or s ACK was dropped               
                 else {
                     received_acks[s] = 0;
+                    
                     // check which packet the ACK is for within the current window,
                     // record that packet's ACK has arrived and turn off corresponding timer
                     int end_check = (e + 1) % WND_SIZE;
@@ -325,6 +331,8 @@ int main (int argc, char *argv[])
             }
         }
     }
+    // *********************************************************************************************************************************
+    // *********************************************************************************************************************************
 
 
 
