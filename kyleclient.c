@@ -234,7 +234,7 @@ int main (int argc, char *argv[])
     int no_more_data = 0;
     int num_packets = 1;
 
-    // timers on or off
+    // timers on or off (important for when the sender window is not yet full)
     int timers_on[WND_SIZE];
     for (int i = 0; i < WND_SIZE; i++) {
         timers_on[i] = 0;
@@ -286,10 +286,10 @@ int main (int argc, char *argv[])
             if (n > 0) {
                 printRecv(&ackpkt);
                 // if received ACK for packet at position s,
-                // turn off s timer and move s to the next position
+                // move s to the next position
                 if (ackpkt.acknum == (pkts[s].seqnum + pkts[s].length) % MAX_SEQN) {
-                    received_acks[s] = 0;   // reset the value 
-                    timers_on[s] = 0;
+                    received_acks[s] = 0;   // reset these values 
+                    timers_on[s] = 0;       // before moving s to next position
                     s = (s + 1) % WND_SIZE;
                     num_packets--;
                     full = 0;
@@ -312,7 +312,7 @@ int main (int argc, char *argv[])
             }
         }
 
-        // for packets in the window, if timed out and no record of ACK, 
+        // for all packets in the window, if timed out (timer must be running) and no record of ACK, 
         // resend only those packets and reset the timers
         int end_check = (e + 1) % WND_SIZE;
         for (int i = s; i != end_check; i = (i + 1) % WND_SIZE) {
