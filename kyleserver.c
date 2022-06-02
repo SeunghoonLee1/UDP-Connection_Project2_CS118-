@@ -261,8 +261,7 @@ int main (int argc, char *argv[])
                     printSend(&ackpkt, 0);
                     sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
 
-                    // while loop break condition,
-                    // received FIN and the sequence numbers match 
+                    // while loop break condition: received FIN and the sequence numbers match 
                     if (recvpkt.seqnum == expected_seqnum) {
                         break;
                     }
