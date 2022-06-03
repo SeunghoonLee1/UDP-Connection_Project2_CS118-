@@ -183,8 +183,8 @@ int main (int argc, char *argv[])
 
     struct packet ackpkt;
     struct packet pkts[WND_SIZE];
-    int s = 0;
-    int e = 0;
+    int s = 0;  //window start
+    int e = 0;  //window end
     int full = 0;
 
 
@@ -246,7 +246,7 @@ int main (int argc, char *argv[])
     // Implement GBN for basic requirement or Selective Repeat to receive bonus 
 
     int no_more_data = 0;
-    int num_packets = 1;
+    int num_packets = 1;    // # of packets that the client hasn't received ACK from the server yet.
 
     // check if timers are on
     int timers_on[WND_SIZE];
@@ -264,7 +264,7 @@ int main (int argc, char *argv[])
     size_t bytesRead;
     while (1) {
         // while loop break condition: no more file data to send
-        if (no_more_data && (num_packets == 0)) {
+        if (no_more_data && (num_packets == 0)) {    
             break;
         }
 
@@ -286,7 +286,6 @@ int main (int argc, char *argv[])
                 else {
                     full = 0;
                 }
-
                 num_packets++;
             }
             else {
@@ -301,18 +300,21 @@ int main (int argc, char *argv[])
             if (n > 0) {
                 printRecv(&ackpkt);
 
+                // Good case
                 // if received an ACK for packet at position s,
-                // move s to next position
+                // move s to next position (increment by 1)
                 if (ackpkt.acknum == (pkts[s].seqnum + pkts[s].length) % MAX_SEQN) {
-                    received_acks[s] = 1;
-                    timers_on[s] = 0;
+                    received_acks[s] = 1;   //mark as received
+                    timers_on[s] = 0;       //turn off the timer
                     s = (s + 1) % WND_SIZE;
                     num_packets--;
                     full = 0;
                 }
 
+                // Bad case
                 // if received an ACK for a packet not at position s, 
-                // then either s data or s ACK was dropped               
+                // then either s 'data' or s 'ACK' was dropped 
+                // either case, the client just updates the arrived packet's record into the array 'received_acks' and 'timers_on'.          
                 else {
                     received_acks[s] = 0;
 
@@ -323,6 +325,7 @@ int main (int argc, char *argv[])
                         if (ackpkt.acknum == (pkts[i].seqnum + pkts[i].length) % MAX_SEQN) {
                             received_acks[i] = 1;
                             timers_on[i] = 0;
+                            //should add a 'break' here??
                         }
                     }
                 }
@@ -334,7 +337,7 @@ int main (int argc, char *argv[])
         for (int i = s; i != end_check; i = (i + 1) % WND_SIZE) {
             if (timers_on[i] && isTimeout(timer_array[i]) && !received_acks[i]) {
                 printTimeout(&pkts[i]);
-                printSend(&pkts[i], 1);
+                printSend(&pkts[i], 1); // retransmission
                 sendto(sockfd, &pkts[i], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);  
                 timer_array[i] = setTimer(); 
                 timers_on[i] = 1;            

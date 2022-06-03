@@ -183,18 +183,25 @@ int main (int argc, char *argv[])
 
     struct packet ackpkt;
     struct packet pkts[WND_SIZE];
-    struct packet window[WND_SIZE];
-    int s = 0;
-    int e = 0;
+    int s = 0;  //window start
+    int e = 0;  //window end
     int full = 0;
-    int filled = 0;
+
+
+
 
 
     // *********************************************************************************************************************************
-    // ********** Added our own timer buffer *******************************************************************************************
+    // *********************************************************************************************************************************
+    
+    // Added our own timer array to correspond to each packet
     double timer_array[WND_SIZE];
+
     // *********************************************************************************************************************************
     // *********************************************************************************************************************************
+
+
+
 
 
     // =====================================
@@ -202,113 +209,153 @@ int main (int argc, char *argv[])
 
     m = fread(buf, 1, PAYLOAD_SIZE, fp);
 
-    buildPkt(&window[0], seqNum, (synackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 1, 0, m, buf);
-    printSend(&window[0], 0);
-    sendto(sockfd, &window[0], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
+    buildPkt(&pkts[0], seqNum, (synackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 1, 0, m, buf);
+    printSend(&pkts[0], 0);
+    sendto(sockfd, &pkts[0], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
+
+
+
 
 
     // *********************************************************************************************************************************
-    // ********** changed timer to timer_array[0] for Selective Repeat *****************************************************************
+    // *********************************************************************************************************************************
+    
+    // changed timer to timer_array[0] for Selective Repeat
     timer_array[0] = setTimer();
-    // timer = setTimer();
+
     // *********************************************************************************************************************************
     // *********************************************************************************************************************************
 
 
-    buildPkt(&window[0], seqNum, (synackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 0, 1, m, buf);
+
+
+
+    buildPkt(&pkts[0], seqNum, (synackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 0, 1, m, buf);
 
     e = 1;
-    filled = 1;
+
+
+
+
+
+    // *********************************************************************************************************************************
+    // *********************************************************************************************************************************
 
     // =====================================
     // *** TODO: Implement the rest of reliable transfer in the client ***
-    // Implement GBN for basic requirement or Selective Repeat to receive bonus
+    // Implement GBN for basic requirement or Selective Repeat to receive bonus 
 
-    // Note: the following code is not the complete logic. It only sends a
-    //       single data packet, and then tears down the connection without
-    //       handling data loss.
-    //       Only for demo purpose. DO NOT USE IT in your final submission    
+    int no_more_data = 0;
+    int num_packets = 1;    // # of packets that the client hasn't received ACK from the server yet.
 
+    // check if timers are on
+    int timers_on[WND_SIZE];
+    for (int i = 0; i < WND_SIZE; i++) {
+        timers_on[i] = 0;
+    }
+    timers_on[0] = 1;
 
+    // check if ACKs have been received
+    int received_acks[WND_SIZE];
+    for (int i = 0; i < WND_SIZE; i++) {
+        received_acks[i] = 0;
+    }
 
     size_t bytesRead;
-
-    // extra flags
-    int no_more_data = 0;
-    int num_packets = 1;
-
-    /*
     while (1) {
-        if (no_more_data && (num_packets == 0)) {
+        // while loop break condition: no more file data to send
+        if (no_more_data && (num_packets == 0)) {    
             break;
         }
+
+        // send packets until sender window is full
         if (!full) {
             bytesRead = fread(buf, 1, PAYLOAD_SIZE, fp);
             if (bytesRead > 0) {
-                seqNum = (seqNum + PAYLOAD_SIZE) % MAX_SEQN;        // check last packet seqNum later... checked and looks good
+                seqNum = (seqNum + PAYLOAD_SIZE) % MAX_SEQN;
                 buildPkt(&pkts[e], seqNum, 0, 0, 0, 0, 0, bytesRead, buf);
                 printSend(&pkts[e], 0);
                 sendto(sockfd, &pkts[e], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
-                timer_array[e] = setTimer();    // implement loss algorithm after...
+                timer_array[e] = setTimer();
+                timers_on[e] = 1;
                 e = (e + 1) % WND_SIZE;
 
-                if (s == e) {
+                if (e == s) {
                     full = 1;
                 }
                 else {
                     full = 0;
                 }
-
                 num_packets++;
-            }else {
+            }
+            else {
                 no_more_data = 1;
             }
         }
 
+        // if sender window full, 
+        // or if no more file data to send (but may still have unACKed packets in sender window)
         if (full || no_more_data) {
-            n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
+            //Q. what if the window is not full but we receive a packet from the server?!
+            // Because we're currently only receiving ACK from the server ONLY WHEN the window is full or there's no more data to send to server.
+            n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);  
             if (n > 0) {
                 printRecv(&ackpkt);
-                if (ackpkt.acknum == pkts[s].seqnum + pkts[s].length) {
+
+                // Good case
+                // if received an ACK for packet at position s,
+                // move s to next position (increment by 1)
+                if (ackpkt.acknum == (pkts[s].seqnum + pkts[s].length) % MAX_SEQN) {
+                    received_acks[s] = 1;   //mark as received
+                    timers_on[s] = 0;       //turn off the timer
                     s = (s + 1) % WND_SIZE;
                     num_packets--;
                     full = 0;
                 }
+
+                // Bad case
+                // if received an ACK for a packet not at position s, 
+                // then either s 'data' or s 'ACK' was dropped 
+                // either case, the client just updates the arrived packet's record into the array 'received_acks' and 'timers_on'.          
+                else {
+                    received_acks[s] = 0;
+
+                    // check which packet the ACK is for within the current window, 
+                    // record its ACK has arrived 
+                    int end_check = (e + 1) % WND_SIZE;
+                    for (int i = (s + 1) % WND_SIZE; i != end_check; i = (i + 1) % WND_SIZE) {
+                        if (ackpkt.acknum == (pkts[i].seqnum + pkts[i].length) % MAX_SEQN) {
+                            received_acks[i] = 1;
+                            timers_on[i] = 0;
+                            //should add a 'break' here??
+                        }
+                    }
+                }
+            }
+        }
+
+        // if timed out, and no record of ACK, resend only those packets
+        int end_check = (e + 1) % WND_SIZE;
+        for (int i = s; i != end_check; i = (i + 1) % WND_SIZE) {
+            if (timers_on[i] && isTimeout(timer_array[i]) && !received_acks[i]) {
+                printTimeout(&pkts[i]);
+                printSend(&pkts[i], 1); // retransmission
+                sendto(sockfd, &pkts[i], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);  
+                timer_array[i] = setTimer(); 
+                timers_on[i] = 1;            
             }
         }
     }
-    */
-
-    while (1) {
-        if(no_more_data && !filled){
-            break;  // if the buffer is empty, that means there are no more packets to transmit. Break out the loop.
-        }
-
-        m = fread(buf, 1, PAYLOAD_SIZE, fp);    
-        if(m > 0){
-            seqNum = (seqNum + m) % MAX_SEQN;
-            buildPkt(&window[e], seqNum, 0, 0, 0, 0, 0, m, buf);
-            printSend(&window[e], 0);
-            sendto(sockfd, &window[e], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
-            e = (e + 1) % WND_SIZE;
-            filled ++;            
-        }else{
-            no_more_data = 1;
-        }
-
-        n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
-        if(n > 0){//means when we received an ACK
-            printRecv(&ackpkt);
-            s = (s + 1) % WND_SIZE;
-            e = (e + 1) % WND_SIZE;
-            filled --;
-        }
-    }
-
-
-
 
     // *** End of your client implementation ***
+
+    // *********************************************************************************************************************************
+    // *********************************************************************************************************************************
+
+
+
+
+
     fclose(fp);
 
     // =====================================

@@ -138,9 +138,9 @@ int main (int argc, char *argv[])
             }
         }
 
-        unsigned short cliSeqNum = (synpkt.seqnum + 1) % MAX_SEQN; // next message from client should have this sequence number
+        unsigned short cliSeqNum = (synpkt.seqnum + 1) % MAX_SEQN; // next message from client should have this sequence number(ACK number sent from server)
 
-        buildPkt(&synackpkt, seqNum, cliSeqNum, 1, 0, 1, 0, 0, NULL);
+        buildPkt(&synackpkt, seqNum, cliSeqNum, 1, 0, 1, 0, 0, NULL);   //send SYN-ACK packet back to client.
 
         while (1) {
             printSend(&synackpkt, 0);
@@ -185,46 +185,158 @@ int main (int argc, char *argv[])
                 break;
         }
 
-        // ********************* TODO: Implement the rest of reliable transfer in the server *********************
-        // Implement GBN for basic requirement or Selective Repeat to receive bonus
 
-        // Note: the following code is not the complete logic. It only expects 
-        //       a single data packet, and then tears down the connection
-        //       without handling data loss.
-        //       Only for demo purpose. DO NOT USE IT in your final submission
+
+
+
+        // *********************************************************************************************************************************
+        // *********************************************************************************************************************************
+
+        // *** TODO: Implement the rest of reliable transfer in the server ***
+        // Implement GBN for basic requirement or Selective Repeat to receive bonus
+        
         struct packet recvpkt;
 
+        // receiver window
+        struct packet receiver_window[WND_SIZE];
+        int s = 0;  // window start
+        int e = 0;  // window end
+        int full = 0;
+
         while(1) {
+            int expected_seqnum = cliSeqNum;
+            int ack_loss = 0;
             n = recvfrom(sockfd, &recvpkt, PKT_SIZE, 0, (struct sockaddr *) &cliaddr, (socklen_t *) &cliaddrlen);
             if (n > 0) {
                 printRecv(&recvpkt);
 
-                if (recvpkt.fin) {
-                    cliSeqNum = (cliSeqNum + 1) % MAX_SEQN;
+                // check if packet already in receiver window 
+                // if already received -> ACK loss(client retransmitted the packet.)
+                for (int i = s; i != e; i = (i + 1) % WND_SIZE) {
+                    if (receiver_window[i].seqnum == recvpkt.seqnum) {  //packet is already in the receiver window.
+                        ack_loss = 1;
+                    }
+                }
 
-                    buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 1, 0, 0, NULL);
+                // if not already in receiver window (no ACK loss), add the received packet
+                // if ACK_loss, nothing to do because the packet is already in the receiver_window.
+                if (!ack_loss) {   
+
+                    // case 1: receiver window is not full,
+                    // add packet to window, increase 'e' position
+                    if (!full) {
+                        receiver_window[e] = recvpkt;
+                        int next = (e + 1) % WND_SIZE;
+                        if (next == s) {
+                            full = 1;
+                        }else {
+                            e = (e + 1) % WND_SIZE;
+                        }
+                    }
+
+                    // case 2: receiver window is full,
+                    // slide entire window over, add packet to window
+                    else {
+                        s = (s + 1) % WND_SIZE;
+                        e = (e + 1) % WND_SIZE;
+                        receiver_window[e] = recvpkt;
+                    }
+                }
+
+                // *** build response ***
+
+                // case 1: no more data to be received
+                if (recvpkt.fin) {
+                    cliSeqNum = (recvpkt.seqnum + 1) % MAX_SEQN;
+
+                    // if no ACK loss, respond with regular ACK,
+                    // if ACK loss, respond with DUP ACK
+                    if (!ack_loss){
+                        buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 1, 0, 0, NULL);
+                    }
+                    else {
+                        buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 0, 1, 0, NULL);
+                    }
+
                     printSend(&ackpkt, 0);
                     sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
 
-                    break;
+                    // while loop break condition: received FIN and the sequence numbers match 
+                    if (recvpkt.seqnum == expected_seqnum) {
+                        break;
+                    }
+
+                    // data or ACK loss, continue waiting for expected_seqnum
+                    // reset cliSeqNum so that expected_seqnum is correct next loop iteration
+                    else {
+                        cliSeqNum = expected_seqnum;
+                    }
                 }
+
+                // case 2: still more data to be received
                 else {
                     cliSeqNum = (recvpkt.seqnum + recvpkt.length) % MAX_SEQN;
-                    fwrite(recvpkt.payload, 1, recvpkt.length, fp);
-                    buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 1, 0, 0, NULL);
+
+                    // if no ACK loss, respond with regular ACK,
+                    // if ACK loss, respond with DUP ACK
+                    if (!ack_loss) {
+                        buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 1, 0, 0, NULL);
+                    }
+                    else {
+                        buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 0, 1, 0, NULL);
+                    }
+
                     printSend(&ackpkt, 0);
                     sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
 
+                    // if received expected packet, write to fd
+                    if (recvpkt.seqnum == expected_seqnum) {
+                        fwrite(recvpkt.payload, 1, recvpkt.length, fp);
 
+                        // check if next packet(s) also already received (should be consecutive in the window), 
+                        // update cliSeqNum to the next unreceived sequence number if they are
+                        int got_next = 0;
+                        int next_index;
+                        for (int i = s; i != e; i = (i + 1) % WND_SIZE) {
+                            if (receiver_window[i].seqnum == cliSeqNum) {
+                                got_next = 1;
+                                next_index = (i + 1) % WND_SIZE;
+                                cliSeqNum = (receiver_window[i].seqnum + receiver_window[i].length) % MAX_SEQN;
+                                break;
+                            }
+                        }
+                        while (got_next) {
+                            if (receiver_window[next_index].seqnum == cliSeqNum) {
+                                cliSeqNum = (receiver_window[next_index].seqnum + receiver_window[next_index].length) % MAX_SEQN;
+                                next_index = (next_index + 1) % WND_SIZE;
+                            }
+                            else {
+                                got_next = 0;
+                            }
+                        }
+                    }
+
+                    // if received unexpected packet, 
+                    // if no ACK loss (data loss only), still write to fd --- Q. wouldn't it cause a file to be written out of order?!
+                    // reset cliSeqNum so that expected_seqnum is correct next loop iteration
+                    else if (recvpkt.seqnum != expected_seqnum) {
+                        if (!ack_loss) {    // it was a data loss.
+                            fwrite(recvpkt.payload, 1, recvpkt.length, fp);
+                        }
+                        cliSeqNum = expected_seqnum;
+                    }
                 }
             }
         }
 
+        // *** End of your server implementation ***
+        
+        // *********************************************************************************************************************************
+        // *********************************************************************************************************************************
 
 
 
 
-        // ********************* End of your server implementation *********************
 
         fclose(fp);
         // =====================================

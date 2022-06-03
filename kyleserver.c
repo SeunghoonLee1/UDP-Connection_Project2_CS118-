@@ -138,9 +138,9 @@ int main (int argc, char *argv[])
             }
         }
 
-        unsigned short cliSeqNum = (synpkt.seqnum + 1) % MAX_SEQN; // next message from client should have this sequence number
+        unsigned short cliSeqNum = (synpkt.seqnum + 1) % MAX_SEQN; // next message from client should have this sequence number(ACK number sent from server)
 
-        buildPkt(&synackpkt, seqNum, cliSeqNum, 1, 0, 1, 0, 0, NULL);
+        buildPkt(&synackpkt, seqNum, cliSeqNum, 1, 0, 1, 0, 0, NULL);   //send SYN-ACK packet back to client.
 
         while (1) {
             printSend(&synackpkt, 0);
@@ -211,30 +211,30 @@ int main (int argc, char *argv[])
                 printRecv(&recvpkt);
 
                 // check if packet already in receiver window 
-                // if already received -> ACK loss
+                // if already received -> ACK loss(client retransmitted the packet.)
                 for (int i = s; i != e; i = (i + 1) % WND_SIZE) {
-                    if (receiver_window[i].seqnum == recvpkt.seqnum) {
+                    if (receiver_window[i].seqnum == recvpkt.seqnum) {  //packet is already in the receiver window.
                         ack_loss = 1;
                     }
                 }
 
-                // if not already in receiver window (no ACK loss), add packet
-                if (!ack_loss) {
+                // if not already in receiver window (no ACK loss), add the received packet
+                // if ACK_loss, nothing to do because the packet is already in the receiver_window.
+                if (!ack_loss) {   
 
-                    // case 1: receiver window is not filled,
-                    // add packet to window, increase e position
+                    // case 1: receiver window is not full,
+                    // add packet to window, increase 'e' position
                     if (!full) {
                         receiver_window[e] = recvpkt;
                         int next = (e + 1) % WND_SIZE;
                         if (next == s) {
                             full = 1;
-                        }
-                        else {
+                        }else {
                             e = (e + 1) % WND_SIZE;
                         }
                     }
 
-                    // case 2: receiver window is filled,
+                    // case 2: receiver window is full,
                     // slide entire window over, add packet to window
                     else {
                         s = (s + 1) % WND_SIZE;
@@ -290,7 +290,7 @@ int main (int argc, char *argv[])
                     sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
 
                     // if received expected packet, write to fd
-                    if (expected_seqnum == recvpkt.seqnum) {
+                    if (recvpkt.seqnum == expected_seqnum) {
                         fwrite(recvpkt.payload, 1, recvpkt.length, fp);
 
                         // check if next packet(s) also already received (should be consecutive in the window), 
@@ -317,10 +317,10 @@ int main (int argc, char *argv[])
                     }
 
                     // if received unexpected packet, 
-                    // if no ACK loss (data loss only), still write to fd
+                    // if no ACK loss (data loss only), still write to fd --- Q. wouldn't it cause a file to be written out of order?!
                     // reset cliSeqNum so that expected_seqnum is correct next loop iteration
-                    else if (!(expected_seqnum == recvpkt.seqnum)) {
-                        if (!ack_loss) {
+                    else if (recvpkt.seqnum != expected_seqnum) {
+                        if (!ack_loss) {    // it was a data loss.
                             fwrite(recvpkt.payload, 1, recvpkt.length, fp);
                         }
                         cliSeqNum = expected_seqnum;
