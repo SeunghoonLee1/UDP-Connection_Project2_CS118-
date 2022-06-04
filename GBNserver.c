@@ -199,14 +199,14 @@ int main (int argc, char *argv[])
 
 
         // receiver window
-        //struct packet receiver_window[WND_SIZE];
+        struct packet receiver_window[WND_SIZE];
         int s = 0;  // window start
         int e = 0;  // window end
         int full = 0;
         int expected_seqnum;    // 1st ACK num sent from the server
         int ack_loss = 0;
-        int latest_ack = 0;
-        int dont_write = 0;
+
+
 
         while(1){
 
@@ -214,6 +214,41 @@ int main (int argc, char *argv[])
             n = recvfrom(sockfd, &recvpkt, PKT_SIZE, 0, (struct sockaddr *) &cliaddr, (socklen_t *) &cliaddrlen);
             if(n > 0){
                 printRecv(&recvpkt);
+
+                // check if packet already in receiver window 
+                // if already received -> ACK loss(client retransmitted the packet.)
+                for (int i = s; i != e; i = (i + 1) % WND_SIZE) {
+                    if (receiver_window[i].seqnum == recvpkt.seqnum) {  //packet is already in the receiver window.
+                        ack_loss = 1;
+                    }
+                }
+                
+                // if not already in receiver window (no ACK loss), add the received packet
+                // if ACK_loss, nothing to do because the packet is already in the receiver_window.
+                if (!ack_loss) {   
+
+                    // case 1: receiver window is not full,
+                    // add packet to window, increase 'e' position
+                    if (!full) {
+                        receiver_window[e] = recvpkt;
+                        int next = (e + 1) % WND_SIZE;
+                        if (next == s) {
+                            full = 1;
+                        }else {
+                            e = (e + 1) % WND_SIZE;
+                        }
+                    }
+
+                    // case 2: receiver window is full,
+                    // slide entire window over, add packet to window
+                    else {
+                        s = (s + 1) % WND_SIZE;
+                        e = (e + 1) % WND_SIZE;
+                        receiver_window[e] = recvpkt;
+                    }
+                }
+
+
                 //check if the appropriate packet arrived.
                 if(recvpkt.seqnum == expected_seqnum){
 
@@ -232,13 +267,11 @@ int main (int argc, char *argv[])
                         buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 1, 0, 0, NULL);
                         printSend(&ackpkt, 0);
                         sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
-                        if(dont_write == 0){
+                        if (!ack_loss) {
                             fwrite(recvpkt.payload, 1, recvpkt.length, fp);
                         }
-                        
                     }                
                 }else{ //Data loss or ACK loss. just return dupACK to the client
-                    dont_write = 1;
                     expected_seqnum = (recvpkt.seqnum + recvpkt.length) % MAX_SEQN;
                     cliSeqNum = expected_seqnum;
                     buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 0, 1, 0, NULL);
@@ -246,9 +279,6 @@ int main (int argc, char *argv[])
                     sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
                     
                 }
-            }else{
-                dont_write = 0;
-            }
 
         }
 
