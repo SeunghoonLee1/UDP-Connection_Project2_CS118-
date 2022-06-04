@@ -208,6 +208,11 @@ int main (int argc, char *argv[])
         int latest_ack = 0;
         int dont_write = 0;
 
+        int write_buffer[MAX_SEQN];
+        for(int i = 0; i < MAX_SEQN; i++){
+            write_buffer[i] = 0;
+        }
+
         while(1){
 
             expected_seqnum = cliSeqNum;
@@ -232,13 +237,12 @@ int main (int argc, char *argv[])
                         buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 1, 0, 0, NULL);
                         printSend(&ackpkt, 0);
                         sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
-                        if(dont_write == 0){
+                        //if(dont_write == 0){
                             fwrite(recvpkt.payload, 1, recvpkt.length, fp);
-                        }
+                        //}
                         
                     }                
                 }else{ //Data loss or ACK loss. just return dupACK to the client
-                    dont_write = 1;
                     expected_seqnum = (recvpkt.seqnum + recvpkt.length) % MAX_SEQN;
                     cliSeqNum = expected_seqnum;
                     buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 0, 1, 0, NULL);
@@ -246,8 +250,6 @@ int main (int argc, char *argv[])
                     sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
                     
                 }
-            }else{
-                dont_write = 0;
             }
 
         }
