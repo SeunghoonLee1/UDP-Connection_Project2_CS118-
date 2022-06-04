@@ -265,6 +265,7 @@ int main (int argc, char *argv[])
     while (1) {
         // while loop break condition: no more file data to send
         if (no_more_data && (num_packets == 0)) {    
+
             break;
         }
 
@@ -278,6 +279,7 @@ int main (int argc, char *argv[])
                 sendto(sockfd, &pkts[e], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
                 timer_array[e] = setTimer();
                 timers_on[e] = 1;
+                received_acks[e] = 0;
                 e = (e + 1) % WND_SIZE;
 
                 if (e == s) {
@@ -295,7 +297,7 @@ int main (int argc, char *argv[])
 
         // if sender window full, 
         // or if no more file data to send (but may still have unACKed packets in sender window)
-        if (full || no_more_data) {
+        //if (full || no_more_data) {
             n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
             if (n > 0) {
                 printRecv(&ackpkt);
@@ -330,7 +332,7 @@ int main (int argc, char *argv[])
                     }
                 }
             }
-        }
+        //}
 
         // if timed out, and no record of ACK, resend only those packets
         int end_check = (e + 1) % WND_SIZE;
