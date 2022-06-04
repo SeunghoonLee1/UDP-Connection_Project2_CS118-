@@ -187,6 +187,23 @@ int main (int argc, char *argv[])
     int e = 0;  //window end
     int full = 0;
 
+
+
+
+
+    // *********************************************************************************************************************************
+    // *********************************************************************************************************************************
+    
+    // Added our own timer array to correspond to each packet
+    double timer_array[WND_SIZE];
+
+    // *********************************************************************************************************************************
+    // *********************************************************************************************************************************
+
+
+
+
+
     // =====================================
     // Send First Packet (ACK containing payload)
 
@@ -195,13 +212,27 @@ int main (int argc, char *argv[])
     buildPkt(&pkts[0], seqNum, (synackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 1, 0, m, buf);
     printSend(&pkts[0], 0);
     sendto(sockfd, &pkts[0], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
+
+
+
+
+
+    // *********************************************************************************************************************************
+    // *********************************************************************************************************************************
     
-    timer = setTimer();
+    // changed timer to timer_array[0] for Selective Repeat
+    timer_array[0] = setTimer();
+
+    // *********************************************************************************************************************************
+    // *********************************************************************************************************************************
+
+
+
+
 
     buildPkt(&pkts[0], seqNum, (synackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 0, 1, m, buf);
 
-    e = 0;
-    // e = 1;
+    e = 1;
 
 
 
@@ -217,10 +248,24 @@ int main (int argc, char *argv[])
     int no_more_data = 0;
     int num_packets = 1;    // # of packets that the client hasn't received ACK from the server yet.
 
+    // check if timers are on
+    int timers_on[WND_SIZE];
+    for (int i = 0; i < WND_SIZE; i++) {
+        timers_on[i] = 0;
+    }
+    timers_on[0] = 1;
+
+    // check if ACKs have been received
+    int received_acks[WND_SIZE];
+    for (int i = 0; i < WND_SIZE; i++) {
+        received_acks[i] = 0;
+    }
+
     size_t bytesRead;
     while (1) {
         // while loop break condition: no more file data to send
         if (no_more_data && (num_packets == 0)) {    
+
             break;
         }
 
@@ -228,20 +273,21 @@ int main (int argc, char *argv[])
         if (!full) {
             bytesRead = fread(buf, 1, PAYLOAD_SIZE, fp);
             if (bytesRead > 0) {
-                e = (e + 1) % WND_SIZE;
                 seqNum = (seqNum + PAYLOAD_SIZE) % MAX_SEQN;
                 buildPkt(&pkts[e], seqNum, 0, 0, 0, 0, 0, bytesRead, buf);
                 printSend(&pkts[e], 0);
                 sendto(sockfd, &pkts[e], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
+                timer_array[e] = setTimer();
+                timers_on[e] = 1;
+                received_acks[e] = 0;
+                e = (e + 1) % WND_SIZE;
 
-                int end_check = (e + 1) % WND_SIZE;
-                if (end_check == s) {
+                if (e == s) {
                     full = 1;
                 }
                 else {
                     full = 0;
                 }
-
                 num_packets++;
             }
             else {
@@ -249,50 +295,59 @@ int main (int argc, char *argv[])
             }
         }
 
-        n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
-        if (n > 0) {
-            printRecv(&ackpkt);
+        // if sender window full, 
+        // or if no more file data to send (but may still have unACKed packets in sender window)
+        //if (full || no_more_data) {
+            n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
+            if (n > 0) {
+                printRecv(&ackpkt);
 
-            // Good case
-            // if received an ACK for packet at position s,
-            // move s to next position (increment by 1)
-            if (ackpkt.acknum == (pkts[s].seqnum + pkts[s].length) % MAX_SEQN) {
-                timer = setTimer();
-                s = (s + 1) % WND_SIZE;
-                num_packets--;
-                full = 0;
+                // Good case
+                // if received an ACK for packet at position s,
+                // move s to next position (increment by 1)
+                if (ackpkt.acknum == (pkts[s].seqnum + pkts[s].length) % MAX_SEQN) {
+                    received_acks[s] = 1;   //mark as received
+                    while (received_acks[s] == 1) {
+                        received_acks[s] = 0;   // reset received indicator
+                        timers_on[s] = 0;   // turn off the timer
+                        s = (s + 1) % WND_SIZE;
+                        num_packets--;
+                        full = 0;
+                    }
+                }
+
+                // Bad case
+                // if received an ACK for a packet not at position s, 
+                // then either s 'data' or s 'ACK' was dropped 
+                // either case, the client just updates the arrived packet's record into the array 'received_acks' and 'timers_on'.          
+                else {
+                    received_acks[s] = 0;
+
+                    // check which packet the ACK is for within the current window, 
+                    // record its ACK has arrived 
+                    int end_check = (e + 1) % WND_SIZE;
+                    for (int i = (s + 1) % WND_SIZE; i != end_check; i = (i + 1) % WND_SIZE) {
+                        if (ackpkt.acknum == (pkts[i].seqnum + pkts[i].length) % MAX_SEQN) {
+                            received_acks[i] = 1;
+                            timers_on[i] = 0;
+                            //should add a 'break' here??
+                        }
+                    }
+                }
             }
+        //}
 
-            // Bad case
-            // if received an ACK for a packet not at position s, 
-            // then either s 'data' or s 'ACK' was dropped 
-            // either case, the client ignores it.
-        }
-
-        if (isTimeout(timer)) {
-            printTimeout(&pkts[s]);
-            timer = setTimer();
-            int i = s;
-            while(1) {
+        // if timed out, and no record of ACK, resend only those packets
+        int end_check = (e + 1) % WND_SIZE;
+        for (int i = s; i != end_check; i = (i + 1) % WND_SIZE) {
+            if (timers_on[i] && isTimeout(timer_array[i]) && !received_acks[i]) {
+                printTimeout(&pkts[i]);
                 printSend(&pkts[i], 1); // retransmission
                 sendto(sockfd, &pkts[i], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);  
-
-                if (i == e) {
-                    break;
-                }
-                else {
-                    i = (i + 1) % WND_SIZE;
-                }
-        
+                timer_array[i] = setTimer(); 
+                timers_on[i] = 1;            
             }
         }
-
-        // if (isTimeout(timer)) {
-        //         printTimeout(&synpkt);
-        //         printSend(&synpkt, 1);
-        //         sendto(sockfd, &synpkt, PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
-        //         timer = setTimer();
-        // }          
     }
 
     // *** End of your client implementation ***

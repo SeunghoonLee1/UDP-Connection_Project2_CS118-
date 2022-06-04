@@ -1,10 +1,10 @@
-USERID=123456789
+USERID=105128998_405103963
 
 default: build
 
 build: server.c client.c
-	gcc -Wall -Wextra -o server GBNserver.c
-	gcc -Wall -Wextra -o client GBNclient.c
+	gcc -Wall -Wextra -o server server.c
+	gcc -Wall -Wextra -o client client.c
 
 clean:
 	rm -rf *.o server client *.tar.gz
