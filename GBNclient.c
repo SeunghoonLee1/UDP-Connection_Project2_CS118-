@@ -232,12 +232,12 @@ int main (int argc, char *argv[])
                 printSend(&pkts[e], 0);
                 sendto(sockfd, &pkts[e], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
                 
-                int end_check = (e + 1) % WND_SIZE;
-                if (end_check == s) {
+                if (e == s) {
                     full = 1;
                 }
                 else {
                     full = 0;
+                    e = (e + 1) % WND_SIZE;
                 }
 
                 num_packets++;
@@ -283,7 +283,14 @@ int main (int argc, char *argv[])
                 }
         
             }
-        }          
+        }
+
+        // if (isTimeout(timer)) {
+        //         printTimeout(&synpkt);
+        //         printSend(&synpkt, 1);
+        //         sendto(sockfd, &synpkt, PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
+        //         timer = setTimer();
+        // }          
     }
 
     // *** End of your client implementation ***

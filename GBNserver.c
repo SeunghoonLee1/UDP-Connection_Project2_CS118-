@@ -203,11 +203,12 @@ int main (int argc, char *argv[])
         int s = 0;  // window start
         int e = 0;  // window end
         int full = 0;
-        int expected_seqnum = cliSeqNum;    // 1st ACK num sent from the server
+        int expected_seqnum;    // 1st ACK num sent from the server
         int ack_loss = 0;
         int latest_ack = 0;
 
         while(1){
+            expected_seqnum = cliSeqNum;
             n = recvfrom(sockfd, &recvpkt, PKT_SIZE, 0, (struct sockaddr *) &cliaddr, (socklen_t *) &cliaddrlen);
             if(n > 0){
                 printRecv(&recvpkt);
@@ -217,7 +218,6 @@ int main (int argc, char *argv[])
                     if (recvpkt.fin) {
                         cliSeqNum = (recvpkt.seqnum + 1) % MAX_SEQN;
                         buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 1, 0, 0, NULL);
-    
                         printSend(&ackpkt, 0);
                         sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
                         break;
@@ -228,11 +228,14 @@ int main (int argc, char *argv[])
                         buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 1, 0, 0, NULL);
                         printSend(&ackpkt, 0);
                         sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
-                        expected_seqnum = ackpkt.acknum;
+                        fwrite(recvpkt.payload, 1, recvpkt.length, fp);
                     }                
                 }else{ //Data loss or ACK loss. just return dupACK to the client
                     cliSeqNum = expected_seqnum;
                     buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 0, 1, 0, NULL);
+                    printSend(&ackpkt, 0);
+                    sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
+                    
                 }
             }
 
