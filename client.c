@@ -264,11 +264,12 @@ int main (int argc, char *argv[])
     size_t bytesRead;
     while (1) {
         // while loop break condition: no more file data to send
+        //printf("num_packets : %d\n", num_packets);
         if (no_more_data && (num_packets == 0)) {    
             break;
         }
 
-        // send packets until sender window is full
+        // send packets until sender window is full // Q. Shouldn't we loop while the window(pkts[]) is not empty?!?!?!
         if (!full) {
             bytesRead = fread(buf, 1, PAYLOAD_SIZE, fp);
             if (bytesRead > 0) {

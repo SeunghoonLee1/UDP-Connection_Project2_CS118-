@@ -210,7 +210,7 @@ int main (int argc, char *argv[])
             if (n > 0) {
                 printRecv(&recvpkt);
 
-                // check if packet already in receiver window 
+                // Check if packet already in receiver window 
                 // if already received -> ACK loss(client retransmitted the packet.)
                 for (int i = s; i != e; i = (i + 1) % WND_SIZE) {
                     if (receiver_window[i].seqnum == recvpkt.seqnum) {  //packet is already in the receiver window.
@@ -218,7 +218,7 @@ int main (int argc, char *argv[])
                     }
                 }
 
-                // if not already in receiver window (no ACK loss), add the received packet
+                // if not already in receiver window (no ACK loss), add the received packet into receiver window.
                 // if ACK_loss, nothing to do because the packet is already in the receiver_window.
                 if (!ack_loss) {   
 
@@ -309,9 +309,11 @@ int main (int argc, char *argv[])
                             if (receiver_window[next_index].seqnum == cliSeqNum) {
                                 cliSeqNum = (receiver_window[next_index].seqnum + receiver_window[next_index].length) % MAX_SEQN;
                                 next_index = (next_index + 1) % WND_SIZE;
+                                //printf("next_index : %")
                             }
                             else {
                                 got_next = 0;
+
                             }
                         }
                     }
