@@ -232,7 +232,8 @@ int main (int argc, char *argv[])
 
     buildPkt(&pkts[0], seqNum, (synackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 0, 1, m, buf);
 
-    e = 1;
+    //e = 1;
+    e= 0;
 
 
 
@@ -265,7 +266,6 @@ int main (int argc, char *argv[])
     while (1) {
         // while loop break condition: no more file data to send
         if (no_more_data && (num_packets == 0)) {    
-
             break;
         }
 
@@ -273,6 +273,7 @@ int main (int argc, char *argv[])
         if (!full) {
             bytesRead = fread(buf, 1, PAYLOAD_SIZE, fp);
             if (bytesRead > 0) {
+                e = (e + 1) % WND_SIZE;
                 seqNum = (seqNum + PAYLOAD_SIZE) % MAX_SEQN;
                 buildPkt(&pkts[e], seqNum, 0, 0, 0, 0, 0, bytesRead, buf);
                 printSend(&pkts[e], 0);
@@ -280,14 +281,15 @@ int main (int argc, char *argv[])
                 timer_array[e] = setTimer();
                 timers_on[e] = 1;
                 received_acks[e] = 0;
-                e = (e + 1) % WND_SIZE;
 
-                if (e == s) {
+                int end_check = (e + 1) % WND_SIZE;
+                if (end_check == s) {
                     full = 1;
                 }
                 else {
                     full = 0;
                 }
+
                 num_packets++;
             }
             else {
@@ -295,57 +297,79 @@ int main (int argc, char *argv[])
             }
         }
 
-        // if sender window full, 
-        // or if no more file data to send (but may still have unACKed packets in sender window)
-        //if (full || no_more_data) {
-            n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
-            if (n > 0) {
-                printRecv(&ackpkt);
+        n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
+        if (n > 0) {
+            printRecv(&ackpkt);
+            printf("%d\n", num_packets);
 
-                // Good case
-                // if received an ACK for packet at position s,
-                // move s to next position (increment by 1)
-                if (ackpkt.acknum == (pkts[s].seqnum + pkts[s].length) % MAX_SEQN) {
-                    received_acks[s] = 1;   //mark as received
-                    while (received_acks[s] == 1) {
-                        received_acks[s] = 0;   // reset received indicator
-                        timers_on[s] = 0;   // turn off the timer
+            // Good case
+            // if received an ACK for packet at position s,
+            // move s to next position (increment by 1)
+            if (ackpkt.acknum == (pkts[s].seqnum + pkts[s].length) % MAX_SEQN) {
+                timers_on[s] = 0;   // turn off timer
+                received_acks[s] = 0;   // reset this
+                s = (s + 1) % WND_SIZE;
+                num_packets --;
+                full = 0;
+
+                while (1) {
+                    if (received_acks[s] == 1) {
+                        received_acks[s] = 0;
+                        timers_on[s] = 0;
+
                         s = (s + 1) % WND_SIZE;
                         num_packets--;
-                        full = 0;
+                    }
+                    else {
+                        break;
                     }
                 }
+            }
 
-                // Bad case
-                // if received an ACK for a packet not at position s, 
-                // then either s 'data' or s 'ACK' was dropped 
-                // either case, the client just updates the arrived packet's record into the array 'received_acks' and 'timers_on'.          
-                else {
-                    received_acks[s] = 0;
+            // Bad case
+            // if received an ACK for a packet not at position s, 
+            // then either s 'data' or s 'ACK' was dropped 
+            // either case, the client just updates the arrived packet's record into the array 'received_acks' and 'timers_on'.          
+            else {
+                received_acks[s] = 0;
 
-                    // check which packet the ACK is for within the current window, 
-                    // record its ACK has arrived 
-                    int end_check = (e + 1) % WND_SIZE;
-                    for (int i = (s + 1) % WND_SIZE; i != end_check; i = (i + 1) % WND_SIZE) {
-                        if (ackpkt.acknum == (pkts[i].seqnum + pkts[i].length) % MAX_SEQN) {
-                            received_acks[i] = 1;
-                            timers_on[i] = 0;
-                            //should add a 'break' here??
+                // check which packet the ACK is for within the current window, 
+                // record its ACK has arrived 
+                int i = (s + 1) % WND_SIZE;
+                while (1) {
+                    if (ackpkt.acknum == (pkts[i].seqnum + pkts[i].length) % MAX_SEQN) {
+                        received_acks[i] = 1;
+                        timers_on[i] = 0;
+                        break;
+                    }
+                    else {
+                        if (i == e) {
+                            break;
+                        }
+                        else {
+                            i = (i + 1) % WND_SIZE;
                         }
                     }
                 }
             }
-        //}
+        }
 
         // if timed out, and no record of ACK, resend only those packets
-        int end_check = (e + 1) % WND_SIZE;
-        for (int i = s; i != end_check; i = (i + 1) % WND_SIZE) {
+        int i = s;
+        while (1) {
             if (timers_on[i] && isTimeout(timer_array[i]) && !received_acks[i]) {
                 printTimeout(&pkts[i]);
                 printSend(&pkts[i], 1); // retransmission
-                sendto(sockfd, &pkts[i], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);  
-                timer_array[i] = setTimer(); 
-                timers_on[i] = 1;            
+                sendto(sockfd, &pkts[i], PKT_SIZE, 0, (struct sockaddr*) & servaddr, servaddrlen);
+                timer_array[i] = setTimer();
+                timers_on[i] = 1;
+                received_acks[i] = 0;
+            }
+            if (i == e) {
+                break;
+            }
+            else {
+                i = (i + 1) % WND_SIZE;
             }
         }
     }
