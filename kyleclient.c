@@ -307,10 +307,13 @@ int main (int argc, char *argv[])
                 // move s to next position (increment by 1)
                 if (ackpkt.acknum == (pkts[s].seqnum + pkts[s].length) % MAX_SEQN) {
                     received_acks[s] = 1;   //mark as received
-                    timers_on[s] = 0;       //turn off the timer
-                    s = (s + 1) % WND_SIZE;
-                    num_packets--;
-                    full = 0;
+                    while (received_acks[s] == 1) {
+                        received_acks[s] = 0;   // reset received indicator
+                        timers_on[s] = 0;   // turn off the timer
+                        s = (s + 1) % WND_SIZE;
+                        num_packets--;
+                        full = 0;
+                    }
                 }
 
                 // Bad case
