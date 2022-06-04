@@ -301,12 +301,14 @@ int main (int argc, char *argv[])
                             if (receiver_window[i].seqnum == cliSeqNum) {
                                 got_next = 1;
                                 next_index = (i + 1) % WND_SIZE;
+                                fwrite(receiver_window[i].payload, 1, receiver_window[i].length, fp);
                                 cliSeqNum = (receiver_window[i].seqnum + receiver_window[i].length) % MAX_SEQN;
                                 break;
                             }
                         }
                         while (got_next) {
                             if (receiver_window[next_index].seqnum == cliSeqNum) {
+                                fwrite(receiver_window[next_index].payload, 1, receiver_window[next_index].length, fp);
                                 cliSeqNum = (receiver_window[next_index].seqnum + receiver_window[next_index].length) % MAX_SEQN;
                                 next_index = (next_index + 1) % WND_SIZE;
                             }
@@ -317,12 +319,8 @@ int main (int argc, char *argv[])
                     }
 
                     // if received unexpected packet, 
-                    // if no ACK loss (data loss only), still write to fd --- Q. wouldn't it cause a file to be written out of order?!
                     // reset cliSeqNum so that expected_seqnum is correct next loop iteration
                     else if (recvpkt.seqnum != expected_seqnum) {
-                        if (!ack_loss) {    // it was a data loss.
-                            fwrite(recvpkt.payload, 1, recvpkt.length, fp);
-                        }
                         cliSeqNum = expected_seqnum;
                     }
                 }
