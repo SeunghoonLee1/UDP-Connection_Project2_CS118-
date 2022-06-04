@@ -200,7 +200,8 @@ int main (int argc, char *argv[])
 
     buildPkt(&pkts[0], seqNum, (synackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 0, 1, m, buf);
 
-    e = 1;
+    e = 0;
+    // e = 1;
 
 
 
@@ -227,17 +228,18 @@ int main (int argc, char *argv[])
         if (!full) {
             bytesRead = fread(buf, 1, PAYLOAD_SIZE, fp);
             if (bytesRead > 0) {
+                e = (e + 1) % WND_SIZE;
                 seqNum = (seqNum + PAYLOAD_SIZE) % MAX_SEQN;
                 buildPkt(&pkts[e], seqNum, 0, 0, 0, 0, 0, bytesRead, buf);
                 printSend(&pkts[e], 0);
                 sendto(sockfd, &pkts[e], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
-                
-                if (e == s) {
+
+                int end_check = (e + 1) % WND_SIZE;
+                if (end_check == s) {
                     full = 1;
                 }
                 else {
                     full = 0;
-                    e = (e + 1) % WND_SIZE;
                 }
 
                 num_packets++;
