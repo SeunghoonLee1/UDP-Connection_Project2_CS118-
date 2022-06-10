@@ -200,8 +200,7 @@ int main (int argc, char *argv[])
 
     buildPkt(&pkts[0], seqNum, (synackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 0, 1, m, buf);
 
-    e = 0;
-    // e = 1;
+    e = 1;
 
 
 
@@ -215,84 +214,112 @@ int main (int argc, char *argv[])
     // Implement GBN for basic requirement or Selective Repeat to receive bonus 
 
     int no_more_data = 0;
-    int num_packets = 1;    // # of packets that the client hasn't received ACK from the server yet.
+    int empty = 0;
+
+    seqNum = (seqNum + PAYLOAD_SIZE) % MAX_SEQN;
 
     size_t bytesRead;
     while (1) {
         // while loop break condition: no more file data to send
-        if (no_more_data && (num_packets == 0)) {    
+        if (no_more_data && empty) {    
             break;
         }
 
         // send packets until sender window is full
         if (!full) {
             bytesRead = fread(buf, 1, PAYLOAD_SIZE, fp);
-            if (bytesRead > 0) {
-                e = (e + 1) % WND_SIZE;
-                seqNum = (seqNum + PAYLOAD_SIZE) % MAX_SEQN;
+
+            // still more data to read/add to sender window
+            if (bytesRead > 0) {            
                 buildPkt(&pkts[e], seqNum, 0, 0, 0, 0, 0, bytesRead, buf);
                 printSend(&pkts[e], 0);
                 sendto(sockfd, &pkts[e], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
 
-                int end_check = (e + 1) % WND_SIZE;
-                if (end_check == s) {
+                seqNum = (seqNum + bytesRead) % MAX_SEQN;
+            
+                empty = 0;
+
+                e = (e + 1) % WND_SIZE;
+                if (e == s) {
                     full = 1;
                 }
                 else {
                     full = 0;
                 }
-
-                num_packets++;
             }
+
+            // no more data to read/add to sender window
             else {
                 no_more_data = 1;
             }
         }
 
+        // receive ACKs
         n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
         if (n > 0) {
             printRecv(&ackpkt);
 
-            // Good case
-            // if received an ACK for packet at position s,
-            // move s to next position (increment by 1)
+            // Good case: received an ACK for packet at position s,
+            // reset timer, move s to next position
             if (ackpkt.acknum == (pkts[s].seqnum + pkts[s].length) % MAX_SEQN) {
                 timer = setTimer();
-                s = (s + 1) % WND_SIZE;
-                num_packets--;
+
                 full = 0;
-            }
 
-            // Bad case
-            // if received an ACK for a packet not at position s, 
-            // then either s 'data' or s 'ACK' was dropped 
-            // either case, the client ignores it.
-        }
-
-        if (isTimeout(timer)) {
-            printTimeout(&pkts[s]);
-            timer = setTimer();
-            int i = s;
-            while(1) {
-                printSend(&pkts[i], 1); // retransmission
-                sendto(sockfd, &pkts[i], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);  
-
-                if (i == e) {
-                    break;
+                s = (s + 1) % WND_SIZE;
+                if (s == e) {
+                    empty = 1;
                 }
                 else {
-                    i = (i + 1) % WND_SIZE;
+                    empty = 0;
                 }
-        
             }
+
+            // Bad case: received an ACK for a packet not at position s, 
+            else {
+                // if ACK is for a packet before s (not in sender window) -> data loss,
+                // wait for timeout and retransmit 
+                // (do nothing)
+
+                // if ACK is for a packet after s (in sender window) -> ACK loss,
+                // reset timer, move s to one spot after corresponding position
+                int next = (s + 1) % WND_SIZE;
+                for (int i = next; i != e; i = (i + 1) % WND_SIZE) {
+                    if (ackpkt.acknum == (pkts[i].seqnum + pkts[i].length) % MAX_SEQN) {
+                        timer = setTimer();
+
+                        full = 0;
+
+                        s = (i + 1) % WND_SIZE;
+                        if (s == e) {
+                            empty = 1;
+                        }
+                        else {
+                            empty = 0;
+                        }
+                        break;
+                    }
+                }
+            }
+
         }
 
-        // if (isTimeout(timer)) {
-        //         printTimeout(&synpkt);
-        //         printSend(&synpkt, 1);
-        //         sendto(sockfd, &synpkt, PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
-        //         timer = setTimer();
-        // }          
+        if (!empty) {
+            if (isTimeout(timer)) {
+                printTimeout(&pkts[s]);
+                timer = setTimer();
+
+                printSend(&pkts[s], 1); // retransmission
+                sendto(sockfd, &pkts[s], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
+
+                int next = (s + 1) % WND_SIZE;
+                for (int i = next; i != e; i = (i + 1) % WND_SIZE) {
+                    printSend(&pkts[i], 1); // retransmission
+                    sendto(sockfd, &pkts[i], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
+                } 
+            }
+        }
+     
     }
 
     // *** End of your client implementation ***
